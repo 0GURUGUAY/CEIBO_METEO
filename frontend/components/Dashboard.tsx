@@ -18,6 +18,8 @@ import {
   type ProjectOverview,
   type ReliabilityScore,
 } from '../lib/api';
+import { demoAutomationStatus, demoLocations, demoOverview, getDemoForecast, getDemoReliabilityScores } from '../lib/demoData';
+import { IS_DEMO_MODE } from '../lib/demoMode';
 
 type Language = 'fr' | 'es';
 
@@ -136,6 +138,10 @@ const translations = {
     savingNotes: 'Enregistrement...',
     notesSaved: 'Notes enregistrées.',
     notesSaveError: 'Échec de l’enregistrement des notes.',
+    demoModeBadge: 'Démo statique',
+    demoModeMessage: 'Cette version affiche des données d’exemple pour partager le frontend sans backend.',
+    demoModeActionDisabled: 'Mode démo: cette action est désactivée dans la version statique.',
+    demoModeAddCity: 'La recherche, l’ajout et la suppression de villes restent désactivés dans la démo statique.',
     refreshTickerLabel: 'Mini-refresh local',
     refreshTickerUpdated: 'Dernière maj',
     refreshTickerNext: 'Prochain passage',
@@ -274,6 +280,10 @@ const translations = {
     savingNotes: 'Guardando...',
     notesSaved: 'Notas guardadas.',
     notesSaveError: 'Error al guardar las notas.',
+    demoModeBadge: 'Demo estática',
+    demoModeMessage: 'Esta versión muestra datos de ejemplo para compartir el frontend sin backend.',
+    demoModeActionDisabled: 'Modo demo: esta acción está desactivada en la versión estática.',
+    demoModeAddCity: 'La búsqueda, el alta y la eliminación de ciudades quedan desactivadas en la demo estática.',
     refreshTickerLabel: 'Mini-refresh local',
     refreshTickerUpdated: 'Última act.',
     refreshTickerNext: 'Próximo paso',
@@ -359,6 +369,22 @@ export function Dashboard() {
 
   useEffect(() => {
     async function load() {
+      if (IS_DEMO_MODE) {
+        setOverview(demoOverview);
+        setAutomationStatus(demoAutomationStatus);
+        setLocations(demoLocations);
+
+        const savedSelectedLocationId = Number(window.localStorage.getItem(SELECTED_LOCATION_STORAGE_KEY));
+        const hasSavedSelection = Number.isInteger(savedSelectedLocationId);
+        const restoredLocationId = hasSavedSelection
+          ? demoLocations.find((location) => location.id === savedSelectedLocationId)?.id ?? null
+          : null;
+
+        setSelectedLocationId(restoredLocationId ?? demoLocations[0]?.id ?? null);
+        setError(null);
+        return;
+      }
+
       try {
         const [projectOverview, automation, bootstrapLocations] = await Promise.all([
           getProjectOverview(),
@@ -395,6 +421,10 @@ export function Dashboard() {
   }, []);
 
   useEffect(() => {
+    if (IS_DEMO_MODE) {
+      return;
+    }
+
     const intervalId = window.setInterval(() => {
       void refreshAutomationStatus();
     }, 30000);
@@ -406,6 +436,13 @@ export function Dashboard() {
 
   useEffect(() => {
     async function loadLatestForecast() {
+      if (IS_DEMO_MODE) {
+        setLatestForecast(getDemoForecast(selectedLocationId));
+        setReliabilityScores(getDemoReliabilityScores(selectedLocationId));
+        setError(null);
+        return;
+      }
+
       if (!selectedLocationId) {
         setLatestForecast(null);
         setReliabilityScores([]);
@@ -443,6 +480,12 @@ export function Dashboard() {
   async function handleSearchLocations(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (IS_DEMO_MODE) {
+      setStatusMessage(t.demoModeActionDisabled);
+      setError(null);
+      return;
+    }
+
     const normalizedQuery = cityQuery.trim();
     if (normalizedQuery.length < 2) {
       setError(t.searchMinLength);
@@ -468,6 +511,12 @@ export function Dashboard() {
   }
 
   async function handleAddLocation(searchResult: LocationSearchResult) {
+    if (IS_DEMO_MODE) {
+      setStatusMessage(t.demoModeActionDisabled);
+      setError(null);
+      return;
+    }
+
     setIsAddingLocation(true);
     setError(null);
     setStatusMessage(null);
@@ -490,6 +539,12 @@ export function Dashboard() {
   }
 
   async function refreshLatestForecast(locationId: number) {
+    if (IS_DEMO_MODE) {
+      setLatestForecast(getDemoForecast(locationId));
+      setReliabilityScores(getDemoReliabilityScores(locationId));
+      return;
+    }
+
     const [forecast, scores] = await Promise.all([
       getLatestForecast(locationId),
       getReliabilityScores(locationId),
@@ -499,10 +554,21 @@ export function Dashboard() {
   }
 
   async function refreshAutomationStatus() {
+    if (IS_DEMO_MODE) {
+      setAutomationStatus(demoAutomationStatus);
+      return;
+    }
+
     setAutomationStatus(await getAutomationStatus());
   }
 
   async function handleDeleteLocation() {
+    if (IS_DEMO_MODE) {
+      setStatusMessage(t.demoModeActionDisabled);
+      setError(null);
+      return;
+    }
+
     if (!selectedLocation) {
       return;
     }
@@ -548,6 +614,12 @@ export function Dashboard() {
   }, [selectedLocation?.id, selectedLocation?.notes]);
 
   async function handleSaveLocationNotes() {
+    if (IS_DEMO_MODE) {
+      setStatusMessage(t.demoModeActionDisabled);
+      setError(null);
+      return;
+    }
+
     if (!selectedLocation || !hasLocationNotesChanges) {
       return;
     }
@@ -574,8 +646,10 @@ export function Dashboard() {
       <section className="pageHeader">
         <h1 className="pageTitle">{t.title}</h1>
         <p className="lead">{t.lead}</p>
+        {IS_DEMO_MODE ? <p className="banner warning">{t.demoModeBadge} • {t.demoModeMessage}</p> : null}
         <div className="marketTicker" aria-label={t.refreshTickerLabel}>
           <div className="marketTickerTrack">
+            {IS_DEMO_MODE ? <span className="tickerPill muted">{t.demoModeBadge}</span> : null}
             <span className="tickerPill accent">{t.refreshTickerLabel}</span>
             <span className="tickerItem">
               <strong>{t.refreshTickerStatus}</strong>
@@ -664,13 +738,14 @@ export function Dashboard() {
                 onChange={(event) => setLocationNotesDraft(event.target.value)}
                 placeholder={t.cityNotesPlaceholder}
                 rows={5}
+                readOnly={IS_DEMO_MODE}
               />
               <div className="cityNotesActions">
                 <button
                   type="button"
                   className="secondaryButton"
                   onClick={() => void handleSaveLocationNotes()}
-                  disabled={isSavingLocationNotes || !hasLocationNotesChanges}
+                  disabled={IS_DEMO_MODE || isSavingLocationNotes || !hasLocationNotesChanges}
                 >
                   {isSavingLocationNotes ? t.savingNotes : t.saveNotes}
                 </button>
@@ -722,57 +797,63 @@ export function Dashboard() {
           </div>
         ) : (
           <>
-            <form className="searchPanel" onSubmit={(event) => void handleSearchLocations(event)}>
-              <label className="fieldLabel" htmlFor="city-search-input">
-                {t.addCityLabel}
-              </label>
-              <div className="inlineActions">
-                <input
-                  id="city-search-input"
-                  type="text"
-                  value={cityQuery}
-                  onChange={(event) => setCityQuery(event.target.value)}
-                  placeholder={t.addCityPlaceholder}
-                />
-                <button type="submit" className="secondaryButton" disabled={isSearching || isAddingLocation}>
-                  {isSearching ? t.searching : t.search}
-                </button>
-              </div>
-            </form>
-
-            {searchResults.length > 0 ? (
-              <div className="searchResults">
-                {searchResults.map((result) => (
-                  <div key={`${result.displayName}-${result.latitude}-${result.longitude}`} className="searchResultItem">
-                    <div>
-                      <strong>{result.displayName}</strong>
-                      <p className="locationMeta">
-                        {result.latitude}, {result.longitude} {result.timezone ? `• ${result.timezone}` : ''}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className="secondaryButton"
-                      onClick={() => void handleAddLocation(result)}
-                      disabled={isAddingLocation || isSearching}
-                    >
-                      {isAddingLocation ? t.adding : t.add}
+            {IS_DEMO_MODE ? (
+              <p className="locationMeta">{t.demoModeAddCity}</p>
+            ) : (
+              <>
+                <form className="searchPanel" onSubmit={(event) => void handleSearchLocations(event)}>
+                  <label className="fieldLabel" htmlFor="city-search-input">
+                    {t.addCityLabel}
+                  </label>
+                  <div className="inlineActions">
+                    <input
+                      id="city-search-input"
+                      type="text"
+                      value={cityQuery}
+                      onChange={(event) => setCityQuery(event.target.value)}
+                      placeholder={t.addCityPlaceholder}
+                    />
+                    <button type="submit" className="secondaryButton" disabled={isSearching || isAddingLocation}>
+                      {isSearching ? t.searching : t.search}
                     </button>
                   </div>
-                ))}
-              </div>
-            ) : null}
+                </form>
 
-            <div className="inlineActions">
-              <button
-                type="button"
-                className="dangerButton"
-                onClick={() => void handleDeleteLocation()}
-                disabled={!selectedLocationId || isDeletingLocation}
-              >
-                {isDeletingLocation ? t.deleting : t.deleteSelectedCity}
-              </button>
-            </div>
+                {searchResults.length > 0 ? (
+                  <div className="searchResults">
+                    {searchResults.map((result) => (
+                      <div key={`${result.displayName}-${result.latitude}-${result.longitude}`} className="searchResultItem">
+                        <div>
+                          <strong>{result.displayName}</strong>
+                          <p className="locationMeta">
+                            {result.latitude}, {result.longitude} {result.timezone ? `• ${result.timezone}` : ''}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="secondaryButton"
+                          onClick={() => void handleAddLocation(result)}
+                          disabled={isAddingLocation || isSearching}
+                        >
+                          {isAddingLocation ? t.adding : t.add}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="inlineActions">
+                  <button
+                    type="button"
+                    className="dangerButton"
+                    onClick={() => void handleDeleteLocation()}
+                    disabled={!selectedLocationId || isDeletingLocation}
+                  >
+                    {isDeletingLocation ? t.deleting : t.deleteSelectedCity}
+                  </button>
+                </div>
+              </>
+            )}
           </>
         )}
       </section>
