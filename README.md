@@ -45,6 +45,23 @@ npm run dev
 
 Voir `.env.example`.
 
+## Telegram
+
+Le backend peut envoyer un digest Telegram concis toutes les 3 heures, a la fin du cycle complet.
+
+Variables a renseigner dans `.env`:
+
+- `TELEGRAM_NOTIFICATIONS_ENABLED=true`
+- `TELEGRAM_BOT_TOKEN=...`
+- `TELEGRAM_CHAT_ID=...`
+- `TELEGRAM_SCORE_ALERT_THRESHOLD_PCT=85`
+
+Le message resume chaque ville avec:
+
+- la prochaine tendance meteo utile
+- les scores de fiabilite H+3 / H+12 / H+24
+- une alerte courte si la fiabilite descend sous le seuil ou si les biais deviennent notables
+
 ## Etapes suivantes recommandees
 
 1. brancher Prisma au backend

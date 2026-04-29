@@ -2,6 +2,7 @@ import { env } from '../config/env.js';
 import { collectForecasts } from './forecastService.js';
 import { collectObservations } from './observationService.js';
 import { calculateReliabilityScores } from './reliabilityService.js';
+import { sendTelegramWeatherDigest } from './telegramNotificationService.js';
 
 type JobName = 'forecastRefresh' | 'forecastCollection' | 'observationCollection' | 'reliabilityCalculation';
 type JobStatus = 'idle' | 'running' | 'succeeded' | 'failed';
@@ -202,10 +203,29 @@ async function runAutomationCycle() {
       const result = await calculateReliabilityScores(env.RELIABILITY_LOOKBACK_DAYS);
       return `${result.processedLocations} ville(s), ${result.generatedScores} score(s) recalculé(s).`;
     });
+
+    await notifyTelegramDigest();
   } finally {
     cycleInFlight = false;
     lastCycleFinishedAt = new Date();
     appendAutomationLog('scheduler', 'info', 'Automation cycle finished.');
+  }
+}
+
+async function notifyTelegramDigest() {
+  try {
+    const result = await sendTelegramWeatherDigest();
+
+    if (!result.sent) {
+      appendAutomationLog('scheduler', 'info', `Telegram digest skipped: ${result.skippedReason}`);
+      return;
+    }
+
+    appendAutomationLog('scheduler', 'info', 'Telegram digest sent successfully.');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown Telegram notification error';
+    appendAutomationLog('scheduler', 'error', `Telegram digest failed: ${message}`);
+    console.error('[automation] Telegram digest:', error);
   }
 }
 
