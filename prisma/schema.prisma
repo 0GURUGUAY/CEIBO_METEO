@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Location {
+  id           Int           @id @default(autoincrement())
+  name         String        @unique
+  latitude     Float
+  longitude    Float
+  timezone     String?
+  notes        String?
+  forecastRuns ForecastRun[]
+  forecastPeriods ForecastPeriod[]
+  forecastDays ForecastDay[]
+  observations Observation[]
+  reliabilityScores ReliabilityScore[]
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@map("locations")
+}
+
+model ForecastRun {
+  id               Int           @id @default(autoincrement())
+  locationId       Int           @map("location_id")
+  provider         String
+  providerModel    String?       @map("provider_model")
+  issuedAt         DateTime      @map("issued_at")
+  fetchedAt        DateTime      @default(now()) @map("fetched_at")
+  latitude         Float?
+  longitude        Float?
+  timezone         String?
+  utcOffsetSeconds Int?          @map("utc_offset_seconds")
+  elevationM       Float?        @map("elevation_m")
+  rawPayload       Json?         @map("raw_payload")
+  location         Location      @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  days             ForecastDay[]
+  periods          ForecastPeriod[]
+
+  @@unique([locationId, provider, issuedAt])
+  @@index([locationId, issuedAt])
+  @@map("forecast_runs")
+}
+
+model ForecastPeriod {
+  id                         Int         @id @default(autoincrement())
+  forecastRunId              Int         @map("forecast_run_id")
+  locationId                 Int         @map("location_id")
+  periodStartAt              DateTime    @map("period_start_at")
+  horizonHours               Int         @map("horizon_hours")
+  weatherCode                Int?        @map("weather_code")
+  temperatureC               Float?      @map("temperature_c")
+  apparentTemperatureC       Float?      @map("apparent_temperature_c")
+  precipitationMm            Float?      @map("precipitation_mm")
+  precipitationProbabilityPct Float?     @map("precipitation_probability_pct")
+  rainMm                     Float?      @map("rain_mm")
+  showersMm                  Float?      @map("showers_mm")
+  snowfallCm                 Float?      @map("snowfall_cm")
+  cloudCoverPct              Float?      @map("cloud_cover_pct")
+  surfacePressureHpa         Float?      @map("surface_pressure_hpa")
+  relativeHumidityPct        Float?      @map("relative_humidity_pct")
+  windSpeedKmh               Float?      @map("wind_speed_kmh")
+  windGustsKmh               Float?      @map("wind_gusts_kmh")
+  windDirectionDeg           Int?        @map("wind_direction_deg")
+  isDay                      Boolean?    @map("is_day")
+  rawPeriod                  Json?       @map("raw_period")
+  forecastRun                ForecastRun @relation(fields: [forecastRunId], references: [id], onDelete: Cascade)
+  location                   Location    @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([forecastRunId, periodStartAt])
+  @@index([locationId, periodStartAt])
+  @@index([locationId, horizonHours])
+  @@map("forecast_periods")
+}
+
+model ForecastDay {
+  id                              Int         @id @default(autoincrement())
+  forecastRunId                   Int         @map("forecast_run_id")
+  locationId                      Int         @map("location_id")
+  targetDate                      DateTime    @db.Date @map("target_date")
+  horizonDays                     Int         @map("horizon_days")
+  weatherCode                     Int?        @map("weather_code")
+  temperatureMaxC                 Float?      @map("temperature_max_c")
+  temperatureMinC                 Float?      @map("temperature_min_c")
+  apparentTemperatureMaxC         Float?      @map("apparent_temperature_max_c")
+  apparentTemperatureMinC         Float?      @map("apparent_temperature_min_c")
+  precipitationSumMm              Float?      @map("precipitation_sum_mm")
+  precipitationProbabilityMaxPct  Float?      @map("precipitation_probability_max_pct")
+  rainSumMm                       Float?      @map("rain_sum_mm")
+  showersSumMm                    Float?      @map("showers_sum_mm")
+  snowfallSumCm                   Float?      @map("snowfall_sum_cm")
+  windSpeedMaxKmh                 Float?      @map("wind_speed_max_kmh")
+  windGustsMaxKmh                 Float?      @map("wind_gusts_max_kmh")
+  windDirectionDominantDeg        Int?        @map("wind_direction_dominant_deg")
+  sunshineDurationSeconds         Int?        @map("sunshine_duration_seconds")
+  daylightDurationSeconds         Int?        @map("daylight_duration_seconds")
+  sunriseAt                       DateTime?   @map("sunrise_at")
+  sunsetAt                        DateTime?   @map("sunset_at")
+  evapotranspirationMm            Float?      @map("evapotranspiration_mm")
+  rawDaily                        Json?       @map("raw_daily")
+  forecastRun                     ForecastRun @relation(fields: [forecastRunId], references: [id], onDelete: Cascade)
+  location                        Location    @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([forecastRunId, targetDate])
+  @@index([locationId, targetDate])
+  @@index([locationId, horizonDays])
+  @@map("forecast_days")
+}
+
+model Observation {
+  id              Int      @id @default(autoincrement())
+  locationId      Int      @map("location_id")
+  observedAt      DateTime @map("observed_at")
+  temperatureC    Float?   @map("temperature_c")
+  precipitationMm Float?   @map("precipitation_mm")
+  windSpeedKmh    Float?   @map("wind_speed_kmh")
+  windGustsKmh    Float?   @map("wind_gusts_kmh")
+  location        Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([locationId, observedAt])
+  @@map("observations")
+}
+
+model ReliabilityScore {
+  id                Int      @id @default(autoincrement())
+  locationId        Int      @map("location_id")
+  horizonHours      Int      @map("horizon_hours")
+  sampleCount       Int      @map("sample_count")
+  temperatureMaeC   Float?   @map("temperature_mae_c")
+  temperatureBiasC  Float?   @map("temperature_bias_c")
+  precipitationMaeMm Float?  @map("precipitation_mae_mm")
+  precipitationBiasMm Float? @map("precipitation_bias_mm")
+  windSpeedMaeKmh   Float?   @map("wind_speed_mae_kmh")
+  windSpeedBiasKmh  Float?   @map("wind_speed_bias_kmh")
+  windGustsMaeKmh   Float?   @map("wind_gusts_mae_kmh")
+  windGustsBiasKmh  Float?   @map("wind_gusts_bias_kmh")
+  scorePct          Float    @map("score_pct")
+  calculatedAt      DateTime @map("calculated_at")
+  location          Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([locationId, horizonHours])
+  @@index([locationId, scorePct])
+  @@map("reliability_scores")
+}
