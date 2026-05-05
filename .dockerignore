@@ -1,0 +1,13 @@
+.git
+.github
+node_modules
+frontend/.next
+frontend/out
+backend/dist
+.next
+.run
+coverage
+.DS_Store
+.env
+.env.local
+backup
